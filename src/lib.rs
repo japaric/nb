@@ -265,3 +265,43 @@ macro_rules! block {
         }
     };
 }
+
+/// Turns the non-blocking expression `$e` into a blocking operation for as long
+/// as the given expression evaluates to true.
+///
+/// This is accomplished by continuously calling the expression `$e` until it no
+/// longer returns `Error::WouldBlock` and by calling expression `$c` to evaluate
+/// whether to keep polling. If `$c` evaluates to false and `$e` evaluates to
+/// `Error::WouldBlock`, `Err(nb::Error::WouldBlock)` is returned.
+///
+/// # Input
+///
+/// An expression `$c` that evaluates to `bool`
+/// An expression `$e` that evaluates to `nb::Result<T, E>`
+///
+/// # Output
+///
+/// - `Ok(t)` if `$e` evaluates to `Ok(t)`
+/// - `Err(nb::Error::Other(e))` if `$e` evaluates to `Err(nb::Error::Other(e))`
+/// - `Err(Error::WouldBlock)` if `$e` evaluates to `Err(Error::WouldBlock)` and `$c` evaluates to false
+#[macro_export]
+macro_rules! block_while {
+    ($c:expr, $e:expr) => {
+        loop {
+            #[allow(unreachable_patterns)]
+            match $e {
+                Err($crate::Error::Other(e)) =>
+                {
+                    #[allow(unreachable_code)]
+                    break Err($crate::Error::Other(e))
+                }
+                Err($crate::Error::WouldBlock) => {
+                    if !$c {
+                        break Err($crate::Error::WouldBlock);
+                    }
+                }
+                Ok(x) => break Ok(x),
+            }
+        }
+    };
+}
